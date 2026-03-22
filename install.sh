@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # VaultSync Agent installer
-# Usage: curl -fsSL https://github.com/KingVics/vaultsync/releases/latest/download/install.sh | bash
-# Override version: VAULTSYNC_VERSION=v1.2.0 bash install.sh
+# Usage: curl -fsSL https://dub.sh/vaultsync-install | sudo bash
+# Override version: VAULTSYNC_VERSION=v1.2.0 curl -fsSL https://dub.sh/vaultsync-install | sudo bash
 
 set -euo pipefail
 
@@ -88,6 +88,6 @@ echo ""
 echo "Next steps:"
 echo "  1. On your dev machine: vaultsync machine create --name <name>"
 echo "  2. Copy the OTET token, then on this VPS:"
-echo "     VAULTSYNC_SERVER=https://your-vault-server vaultsync enroll <OTET>"
+echo "     vaultsync enroll <OTET>"
 echo "  3. On dev: vaultsync grant --machine <name> --label <label> --env Production"
-echo "  4. Run your app: VAULTSYNC_SERVER=https://... vaultsync run --label <l> --env Production -- node dist/index.js"
+echo "  4. On this VPS: vaultsync run --label <l> --env Production -- node dist/index.js"
