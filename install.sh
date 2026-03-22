@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/env bash
 # VaultSync Agent installer
 # Usage: curl -fsSL https://cdn.jsdelivr.net/gh/KingVics/vaultsync-releases@main/install.sh | sudo bash
