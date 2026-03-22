@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# VaultSync Agent installer
+# Usage: curl -fsSL https://github.com/KingVics/vaultsync/releases/latest/download/install.sh | bash
+# Override version: VAULTSYNC_VERSION=v1.2.0 bash install.sh
+
+set -euo pipefail
+
+INSTALL_DIR="/usr/local/bin"
+IDENTITY_DIR="/etc/vaultsync"
+REPO="KingVics/vaultsync-releases"
+VERSION="${VAULTSYNC_VERSION:-latest}"
+
+if [[ $EUID -ne 0 ]]; then
+  echo "Error: this script must be run as root" >&2
+  exit 1
+fi
+
+# Detect architecture
+ARCH=$(uname -m)
+case "$ARCH" in
+  x86_64)          ARCH="amd64" ;;
+  aarch64|arm64)   ARCH="arm64" ;;
+  *)
+    echo "Error: unsupported architecture: $ARCH" >&2
+    exit 1
+    ;;
+esac
+
+# Resolve download URL
+if [[ "$VERSION" == "latest" ]]; then
+  BINARY_URL="https://github.com/${REPO}/releases/latest/download/vaultsync-linux-${ARCH}"
+else
+  BINARY_URL="https://github.com/${REPO}/releases/download/${VERSION}/vaultsync-linux-${ARCH}"
+fi
+
+BINARY_URL="${VAULTSYNC_BINARY_URL:-$BINARY_URL}"
+
+echo "→ Downloading VaultSync agent (linux/${ARCH}) ..."
+curl -fsSL "$BINARY_URL" -o "$INSTALL_DIR/vaultsync"
+chmod +x "$INSTALL_DIR/vaultsync"
+
+echo "→ Verifying checksum..."
+CHECKSUM_URL="${BINARY_URL%/*}/checksums.txt"
+if curl -fsSL "$CHECKSUM_URL" -o /tmp/vaultsync-checksums.txt 2>/dev/null; then
+  EXPECTED=$(grep "vaultsync-linux-${ARCH}" /tmp/vaultsync-checksums.txt | awk '{print $1}')
+  ACTUAL=$(sha256sum "$INSTALL_DIR/vaultsync" | awk '{print $1}')
+  if [[ -z "$EXPECTED" ]]; then
+    echo "⚠ Warning: no checksum entry found for vaultsync-linux-${ARCH} — skipping"
+  elif [[ "$EXPECTED" != "$ACTUAL" ]]; then
+    echo "Error: checksum mismatch — binary may be corrupted or tampered" >&2
+    rm -f "$INSTALL_DIR/vaultsync"
+    exit 1
+  else
+    echo "✓ Checksum verified"
+  fi
+else
+  echo "⚠ Warning: could not fetch checksums.txt — skipping verification"
+fi
+
+echo "→ Creating identity directory..."
+mkdir -p "$IDENTITY_DIR"
+chmod 700 "$IDENTITY_DIR"
+
+echo "→ Installing systemd service..."
+cat > /etc/systemd/system/vaultsync-run.service << 'SERVICE'
+[Unit]
+Description=VaultSync Secret Runner
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/vaultsync/run.env
+ExecStart=/bin/sh -c 'exec /usr/local/bin/vaultsync run --label "$LABEL" --env "$ENVIRONMENT" -- $APP_COMMAND'
+Restart=on-failure
+RestartSec=5s
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+SERVICE
+
+systemctl daemon-reload
+
+echo ""
+echo "✓ VaultSync agent installed to $INSTALL_DIR/vaultsync"
+echo ""
+echo "Next steps:"
+echo "  1. On your dev machine: vaultsync machine create --name <name>"
+echo "  2. Copy the OTET token, then on this VPS:"
+echo "     VAULTSYNC_SERVER=https://your-vault-server vaultsync enroll <OTET>"
+echo "  3. On dev: vaultsync grant --machine <name> --label <label> --env Production"
+echo "  4. Run your app: VAULTSYNC_SERVER=https://... vaultsync run --label <l> --env Production -- node dist/index.js"
