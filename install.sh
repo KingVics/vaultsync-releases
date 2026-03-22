@@ -57,8 +57,12 @@ else
   echo "⚠ Warning: could not fetch checksums.txt — skipping verification"
 fi
 
+echo "→ Creating vaultsync system user..."
+useradd --system --no-create-home --shell /usr/sbin/nologin vaultsync 2>/dev/null || true
+
 echo "→ Creating identity directory..."
 mkdir -p "$IDENTITY_DIR"
+chown vaultsync:vaultsync "$IDENTITY_DIR"
 chmod 700 "$IDENTITY_DIR"
 
 echo "→ Installing systemd service..."
@@ -69,6 +73,7 @@ After=network.target
 
 [Service]
 Type=simple
+User=vaultsync
 EnvironmentFile=/etc/vaultsync/run.env
 ExecStart=/bin/sh -c 'exec /usr/local/bin/vaultsync run --label "$LABEL" --env "$ENVIRONMENT" -- $APP_COMMAND'
 Restart=on-failure
@@ -78,6 +83,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+ReadWritePaths=/etc/vaultsync
 SERVICE
 
 systemctl daemon-reload
