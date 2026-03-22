@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # VaultSync Agent installer
-# Usage: curl -fsSL https://dub.sh/vaultsync-install | sudo bash
+# Usage: curl -fsSL https://cdn.jsdelivr.net/gh/KingVics/vaultsync-releases@main/install.sh | sudo bash
 # Override version: VAULTSYNC_VERSION=v1.2.0 curl -fsSL https://dub.sh/vaultsync-install | sudo bash
 
 set -euo pipefail
