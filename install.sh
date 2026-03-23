@@ -37,27 +37,39 @@ fi
 
 BINARY_URL="${VAULTSYNC_BINARY_URL:-$BINARY_URL}"
 
+CHECKSUM_URL="${BINARY_URL%/*}/checksums.txt"
+TMP_BINARY="/tmp/vaultsync-download"
+TMP_CHECKSUMS="/tmp/vaultsync-checksums.txt"
+
+# Clean up temp files on any exit (success or failure)
+trap 'rm -f "$TMP_BINARY" "$TMP_CHECKSUMS"' EXIT
+
 echo "→ Downloading VaultSync agent (linux/${ARCH}) ..."
-curl -fsSL "$BINARY_URL" -o "$INSTALL_DIR/vaultsync"
-chmod +x "$INSTALL_DIR/vaultsync"
+curl -fsSL "$BINARY_URL" -o "$TMP_BINARY"
 
 echo "→ Verifying checksum..."
-CHECKSUM_URL="${BINARY_URL%/*}/checksums.txt"
-if curl -fsSL "$CHECKSUM_URL" -o /tmp/vaultsync-checksums.txt 2>/dev/null; then
-  EXPECTED=$(grep "vaultsync-linux-${ARCH}" /tmp/vaultsync-checksums.txt | awk '{print $1}')
-  ACTUAL=$(sha256sum "$INSTALL_DIR/vaultsync" | awk '{print $1}')
-  if [[ -z "$EXPECTED" ]]; then
-    echo "⚠ Warning: no checksum entry found for vaultsync-linux-${ARCH} — skipping"
-  elif [[ "$EXPECTED" != "$ACTUAL" ]]; then
-    echo "Error: checksum mismatch — binary may be corrupted or tampered" >&2
-    rm -f "$INSTALL_DIR/vaultsync"
-    exit 1
-  else
-    echo "✓ Checksum verified"
-  fi
-else
-  echo "⚠ Warning: could not fetch checksums.txt — skipping verification"
+if ! curl -fsSL "$CHECKSUM_URL" -o "$TMP_CHECKSUMS" 2>/dev/null; then
+  echo "Error: could not fetch checksums.txt — aborting for security" >&2
+  exit 1
 fi
+
+EXPECTED=$(grep "vaultsync-linux-${ARCH}" "$TMP_CHECKSUMS" | awk '{print $1}')
+if [[ -z "$EXPECTED" ]]; then
+  echo "Error: no checksum entry found for vaultsync-linux-${ARCH} — aborting" >&2
+  exit 1
+fi
+
+ACTUAL=$(sha256sum "$TMP_BINARY" | awk '{print $1}')
+if [[ "$EXPECTED" != "$ACTUAL" ]]; then
+  echo "Error: checksum mismatch — binary may be corrupted or tampered" >&2
+  echo "  expected: $EXPECTED" >&2
+  echo "  got:      $ACTUAL" >&2
+  exit 1
+fi
+echo "✓ Checksum verified"
+
+# Only install after successful verification
+install -m 755 "$TMP_BINARY" "$INSTALL_DIR/vaultsync"
 
 echo "→ Creating vaultsync system user..."
 useradd --system --no-create-home --shell /usr/sbin/nologin vaultsync 2>/dev/null || true
